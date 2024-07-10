@@ -115,8 +115,34 @@ def inference(ort_session,
     bboxes[:, 1::2] = np.clip(bboxes[:, 1::2], 0, h)
     bboxes = bboxes.round().astype('int')
 
+    
+    for i in range(len(bboxes)):
+        bbox = bboxes[i]
+        image_height, image_width, image_channels = ori_image.shape
+        box_xmin, box_ymin, box_xmax, box_ymax = bbox
+
+        if box_xmin < 0:
+            box_xmin = 0
+                            
+        if box_ymin < 0:
+            box_ymin = 0
+
+        if box_xmax > image_width:
+            box_xmax = image_width
+
+        if box_ymax > image_height:
+            box_ymax = image_height
+
+                            
+        crop = ori_image[box_ymin:box_ymax, box_xmin:box_xmax,:]
+
+        fileName, fileExt = os.path.splitext(osp.basename(image_path))
+
+        cv2.imwrite(osp.join(output_dir, f'{fileName}crop{str(i+1)}{fileExt}'), crop)
+
     image_out = visualize(ori_image, bboxes, labels, scores, texts)
     cv2.imwrite(osp.join(output_dir, osp.basename(image_path)), image_out)
+
     return image_out
 
 

@@ -125,8 +125,8 @@ def inference_with_postprocessing(ort_session,
                                   texts,
                                   output_dir,
                                   size=(640, 640),
-                                  nms_thr=0.7,
-                                  score_thr=0.3,
+                                  nms_thr=0.65,
+                                  score_thr=0.05,
                                   max_dets=300):
     # export with `--without-nms`
     ori_image = cv2.imread(image_path)
@@ -140,35 +140,47 @@ def inference_with_postprocessing(ort_session,
     ori_scores = torch.from_numpy(scores[0]).to('cuda:0')
     ori_bboxes = torch.from_numpy(bboxes[0]).to('cuda:0')
 
+    scores, labels = torch.max(ori_scores, dim=1)
+    keep_idx = (scores > 0.001)
+    bboxes = ori_bboxes[keep_idx]
+    scores = scores[keep_idx]
+    labels = labels[keep_idx]
+
+    # batched nms
+    bbox_inds = batched_nms(bboxes, scores, labels, iou_threshold=nms_thr)
+
+    scores = scores[bbox_inds]
+    bboxes = bboxes[bbox_inds]
+    labels = labels[bbox_inds]
+
     scores_list = []
     labels_list = []
     bboxes_list = []
-    # class-specific NMS
-    for cls_id in range(len(texts)):
-        cls_scores = ori_scores[:, cls_id]
-        labels = torch.ones(cls_scores.shape[0], dtype=torch.long) * cls_id
-        keep_idxs = nms(ori_bboxes, cls_scores, iou_threshold=nms_thr)
-        cur_bboxes = ori_bboxes[keep_idxs]
-        cls_scores = cls_scores[keep_idxs]
-        labels = labels[keep_idxs]
-        scores_list.append(cls_scores)
-        labels_list.append(labels)
-        bboxes_list.append(cur_bboxes)
 
-    scores = torch.cat(scores_list, dim=0)
-    labels = torch.cat(labels_list, dim=0)
-    bboxes = torch.cat(bboxes_list, dim=0)
+    if bbox_inds.shape[0] > max_dets:
+        for cls_id in range(len(texts)):
+            scores_cls = scores[labels == cls_id]
+            print(scores_cls.shape)
+            if scores_cls.shape[0] == 0:
+                continue
+            _, index = scores_cls.sort()
+            keep_inds = index[:max_dets]
+            box_cls = bboxes[labels == cls_id][keep_inds]
+            scores_cls = scores[labels == cls_id][keep_inds]
+            labels_cls = labels[labels == cls_id][keep_inds]
+
+            scores_list.append(scores_cls)
+            labels_list.append(labels_cls)
+            bboxes_list.append(box_cls)
+        scores = torch.cat(scores_list, dim=0)
+        labels = torch.cat(labels_list, dim=0)
+        bboxes = torch.cat(bboxes_list, dim=0)
+
 
     keep_idxs = scores > score_thr
     scores = scores[keep_idxs]
     labels = labels[keep_idxs]
     bboxes = bboxes[keep_idxs]
-    if len(keep_idxs) > max_dets:
-        _, sorted_idx = torch.sort(scores, descending=True)
-        keep_idxs = sorted_idx[:max_dets]
-        bboxes = bboxes[keep_idxs]
-        scores = scores[keep_idxs]
-        labels = labels[keep_idxs]
 
     # Get candidate predict info by num_dets
     scores = scores.cpu().numpy()

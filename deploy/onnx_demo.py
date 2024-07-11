@@ -121,6 +121,12 @@ def inference(ort_session,
         image_height, image_width, image_channels = ori_image.shape
         box_xmin, box_ymin, box_xmax, box_ymax = bbox
 
+        padding = 20
+        box_xmin -= padding
+        box_ymin -= padding
+        box_xmax += padding
+        box_ymax += padding
+
         if box_xmin < 0:
             box_xmin = 0
                             

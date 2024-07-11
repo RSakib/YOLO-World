@@ -1,6 +1,7 @@
 import numpy as np
 import cv2 as cv
 import matplotlib.pyplot as plt
+from scipy.cluster.vq import whiten, kmeans, vq
 
 im = cv.imread('.\\onnx_outputs\\resized d3uam4kdcrop1.png')
 assert im is not None, "file could not be read, check with os.path.exists()"
@@ -12,10 +13,8 @@ lines = np.squeeze(lines)
 for i in range(len(lines)):
     r, theta = lines[i]
     if r < 0:
-        print(theta)
         theta = -(np.pi - theta)
         r = -r
-        print(theta)
         lines[i] = (r, theta)
 
     # Stores the value of cos(theta) in a
@@ -46,12 +45,22 @@ for i in range(len(lines)):
     # (0,0,255) denotes the colour of the line to be
     # drawn. In this case, it is red.
     cv.line(im, (x1, y1), (x2, y2), (0, 0, 255), 2)
+    lines[i] = (r, theta*180/np.pi)
+print(lines)
+
+# normalize
+dataset = whiten(lines)
+
+# generate code book
+centroids, mean_dist = kmeans(lines, 4)
+print("Code-book :\n", centroids, "\n")
  
 # All the changes made in the input image are finally
 # written on a new image houghlines.jpg
 cv.imwrite('linesDetected.jpg', im)
 
-plt.scatter(lines[:,0], lines[:,1]*180/np.pi)
+plt.scatter(lines[:,0], lines[:,1])
+plt.scatter(centroids[:,0], centroids[:,1])
 
 plt.show()
 """ if lines is not None:

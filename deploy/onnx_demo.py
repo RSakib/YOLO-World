@@ -139,12 +139,16 @@ def inference(ort_session,
         if box_ymax > image_height:
             box_ymax = image_height
 
-                            
+        ## START CROPPING OUT AROUND THE BOUNDING BOX ##
+
         crop = ori_image[box_ymin:box_ymax, box_xmin:box_xmax,:]
 
         fileName, fileExt = os.path.splitext(osp.basename(image_path))
-
+        
+        # Write all cropped images to directory
         cv2.imwrite(osp.join(output_dir, f'{fileName}crop{str(i+1)}{fileExt}'), crop)
+
+        ## DONE CROPPING AROUND THE BOUNDING BOX ##
 
     image_out = visualize(ori_image, bboxes, labels, scores, texts)
     cv2.imwrite(osp.join(output_dir, osp.basename(image_path)), image_out)
